@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Levey-Jennings QC Master Table</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: #f0f5fa;
+            color: #333;
+            padding: 20px;
+            margin: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            text-align: center;
+            color: #2c3e50;
+        }
+        .input-group {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f9f9f9;
+            border-radius: 8px;
+        }
+        label {
+            display: block;
+            margin: 15px 0 5px;
+            font-weight: bold;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        button#add-btn {
+            width: 100%;
+            padding: 14px;
+            background: #27ae60;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-size: 18px;
+            cursor: pointer;
+            margin-top: 15px;
+        }
+        button#add-btn:hover { background: #219a52; }
+        .small-tables { margin-bottom: 50px; }
+        .analyte-block {
+            margin-top: 30px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        .analyte-title {
+            font-size: 20px;
+            font-weight: bold;
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 15px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #aaa;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background: #3498db;
+            color: white;
+            font-weight: bold;
+        }
+        .mean-cell {
+            font-weight: bold;
+            background: #ecf0f1;
+        }
+        .delete-btn {
+            display: block;
+            margin: 15px auto 0;
+            padding: 8px 16px;
+            background: #e74c3c;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .delete-btn:hover { background: #c0392b; }
+
+        /* Master Table Specific Styles */
+        #master-table {
+            font-size: 15px;
+            margin-top: 50px;
+            table-layout: fixed; /* Important for controlling column widths */
+        }
+        #master-table th {
+            background: #2c3e50;
+        }
+
+        /* Narrow columns for limits */
+        #master-table .limits-cell {
+            width: 7%; /* Keep these narrow */
+            white-space: nowrap;
+            font-size: 14px;
+        }
+
+        /* Wider columns for daily QC inputs */
+        #master-table .daily-cell {
+            width: 10%; /* Much wider than limits – adjust as needed */
+            min-width: 90px;
+        }
+
+        #master-table input.daily-input {
+            width: 95%;
+            padding: 10px;
+            border: none;
+            background: transparent;
+            text-align: center;
+            font-size: 15px;
+            box-sizing: border-box;
+        }
+        #master-table input.daily-input:focus {
+            background: #ffffcc;
+            outline: 2px solid #3498db;
+        }
+
+        .no-data {
+            text-align: center;
+            color: #888;
+            font-style: italic;
+            padding: 40px;
+        }
+
+        /* PRINT STYLES */
+        @media print {
+            body { background: white; padding: 10px; font-size: 12pt; }
+            .container { box-shadow: none; padding: 10px; }
+            .input-group, .small-tables, button, .delete-btn, h1 { display: none !important; }
+            h2 { page-break-before: always; margin-top: 0; font-size: 16pt; }
+            #master-table {
+                font-size: 11pt;
+                width: 100%;
+                border-collapse: collapse;
+            }
+            #master-table th {
+                background: #2c3e50 !important;
+                color: white !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+            }
+            #master-table input.daily-input {
+                display: none !important;
+            }
+            #master-table td.daily-cell {
+                border: 1px solid #aaa;
+                background: white;
+                height: 40px; /* Gives nice blank space when printing */
+            }
+            @page { margin: 0.8cm; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Levey-Jennings QC Control Limits</h1>
+        <div class="input-group">
+            <label>Analyte / Test Name</label>
+            <input type="text" id="analyte" placeholder="e.g., Glucose">
+            <label>Target Mean</label>
+            <input type="number" id="mean" step="any" placeholder="e.g., 100.0">
+            <label>Standard Deviation (SD)</label>
+            <input type="number" id="sd" step="any" placeholder="e.g., 4.0">
+            <button id="add-btn">Add Analyte</button>
+        </div>
+        <div class="small-tables" id="small-tables"></div>
+        <h2>Master QC Table</h2>
+        <div id="master-container">
+            <p class="no-data">Add analytes above to generate the master table.</p>
+        </div>
+    </div>
+
+    <script>
+        let analytes = JSON.parse(localStorage.getItem('qcAnalytes')) || [];
+        let dailyResults = JSON.parse(localStorage.getItem('qcDailyResults')) || {};
+
+        const smallTablesDiv = document.getElementById('small-tables');
+        const masterContainer = document.getElementById('master-container');
+
+        function renderAll() {
+            renderSmallTables();
+            renderMasterTable();
+        }
+
+        function renderSmallTables() {
+            if (analytes.length === 0) {
+                smallTablesDiv.innerHTML = '';
+                return;
+            }
+            let html = '';
+            analytes.forEach((item, index) => {
+                const mean = item.mean;
+                const sd = item.sd;
+                html += `
+                    <div class="analyte-block">
+                        <div class="analyte-title">${item.analyte.toUpperCase()}</div>
+                        <table>
+                            <thead>
+                                <tr><th>Level</th><th>Lower Limit</th><th>Target Mean</th><th>Upper Limit</th></tr>
+                            </thead>
+                            <tbody>
+                                <tr><td>Mean</td><td></td><td class="mean-cell">${mean.toFixed(3)}</td><td></td></tr>
+                                <tr><td>±1 SD</td><td>${(mean - sd).toFixed(3)}</td><td class="mean-cell">${mean.toFixed(3)}</td><td>${(mean + sd).toFixed(3)}</td></tr>
+                                <tr><td>±2 SD</td><td>${(mean - 2*sd).toFixed(3)}</td><td class="mean-cell">${mean.toFixed(3)}</td><td>${(mean + 2*sd).toFixed(3)}</td></tr>
+                                <tr><td>±3 SD</td><td>${(mean - 3*sd).toFixed(3)}</td><td class="mean-cell">${mean.toFixed(3)}</td><td>${(mean + 3*sd).toFixed(3)}</td></tr>
+                            </tbody>
+                        </table>
+                        <button class="delete-btn" onclick="removeAnalyte(${index})">Delete Analyte</button>
+                    </div>
+                `;
+            });
+            smallTablesDiv.innerHTML = html;
+        }
+
+        function renderMasterTable() {
+            if (analytes.length === 0) {
+                masterContainer.innerHTML = '<p class="no-data">Add analytes above to generate the master table.</p>';
+                return;
+            }
+            let html = `
+                <table id="master-table">
+                    <thead>
+                        <tr>
+                            <th rowspan="2">Analyte</th>
+                            <th rowspan="2">Mean</th>
+                            <th rowspan="2">SD</th>
+                            <th colspan="2">±1 SD</th>
+                            <th colspan="2">±2 SD</th>
+                            <th colspan="2">±3 SD</th>
+                            <th colspan="6">Daily QC Results</th>
+                        </tr>
+                        <tr>
+                            <th>Lower</th><th>Upper</th>
+                            <th>Lower</th><th>Upper</th>
+                            <th>Lower</th><th>Upper</th>
+                            <th></th><th></th><th></th><th></th><th></th><th></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+            `;
+            analytes.forEach(item => {
+                const key = item.analyte;
+                const results = dailyResults[key] || Array(6).fill('');
+                html += `
+                    <tr>
+                        <td><strong>${item.analyte}</strong></td>
+                        <td>${item.mean.toFixed(3)}</td>
+                        <td>${item.sd.toFixed(3)}</td>
+                        <td class="limits-cell">${(item.mean - item.sd).toFixed(3)}</td>
+                        <td class="limits-cell">${(item.mean + item.sd).toFixed(3)}</td>
+                        <td class="limits-cell">${(item.mean - 2*item.sd).toFixed(3)}</td>
+                        <td class="limits-cell">${(item.mean + 2*item.sd).toFixed(3)}</td>
+                        <td class="limits-cell">${(item.mean - 3*item.sd).toFixed(3)}</td>
+                        <td class="limits-cell">${(item.mean + 3*item.sd).toFixed(3)}</td>
+                `;
+                results.forEach((val, i) => {
+                    html += `
+                        <td class="daily-cell">
+                            <input type="text" class="daily-input"
+                                   data-analyte="${key}" data-day="${i}"
+                                   value="${val}">
+                        </td>
+                    `;
+                });
+                html += `</tr>`;
+            });
+            html += `</tbody></table>`;
+            masterContainer.innerHTML = html;
+
+            // Attach input listeners
+            document.querySelectorAll('.daily-input').forEach(input => {
+                input.addEventListener('input', function() {
+                    const analyte = this.dataset.analyte;
+                    const day = parseInt(this.dataset.day);
+                    if (!dailyResults[analyte]) dailyResults[analyte] = Array(6).fill('');
+                    dailyResults[analyte][day] = this.value.trim();
+                    localStorage.setItem('qcDailyResults', JSON.stringify(dailyResults));
+                });
+            });
+        }
+
+        document.getElementById('add-btn').onclick = () => {
+            const analyte = document.getElementById('analyte').value.trim();
+            const mean = parseFloat(document.getElementById('mean').value);
+            const sd = parseFloat(document.getElementById('sd').value);
+            if (!analyte || isNaN(mean) || isNaN(sd) || sd < 0) {
+                alert('Please enter valid analyte name, mean, and positive SD.');
+                return;
+            }
+            if (analytes.some(a => a.analyte.toLowerCase() === analyte.toLowerCase())) {
+                if (!confirm('This analyte already exists. Replace it?')) return;
+                analytes = analytes.filter(a => a.analyte.toLowerCase() !== analyte.toLowerCase());
+            }
+            analytes.push({ analyte, mean, sd });
+            localStorage.setItem('qcAnalytes', JSON.stringify(analytes));
+            document.getElementById('analyte').value = '';
+            document.getElementById('mean').value = '';
+            document.getElementById('sd').value = '';
+            renderAll();
+        };
+
+        function removeAnalyte(index) {
+            if (confirm('Delete this analyte and all its daily results?')) {
+                const analyte = analytes[index].analyte;
+                analytes.splice(index, 1);
+                delete dailyResults[analyte];
+                localStorage.setItem('qcAnalytes', JSON.stringify(analytes));
+                localStorage.setItem('qcDailyResults', JSON.stringify(dailyResults));
+                renderAll();
+            }
+        }
+
+        document.addEventListener('keydown', e => {
+            if (e.key === 'Enter' && document.activeElement.tagName === 'INPUT') {
+                document.getElementById('add-btn').click();
+            }
+        });
+
+        renderAll();
+    </script>
+</body>
+</html>
